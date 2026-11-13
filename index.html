@@ -9,7 +9,7 @@
 <style>
 /* ================= ESTILO GERAL ================= */
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{margin:0;height:100%;overflow:hidden;background:#16203c;color:#fff;
+html,body{margin:0;height:100%;height:100dvh;overflow:hidden;background:#16203c;color:#fff;
   font-family:"Trebuchet MS","Segoe UI",system-ui,-apple-system,sans-serif;
   user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;touch-action:none}
 canvas#gl,canvas#cv{position:fixed;left:0;top:0;width:100%;height:100%;display:block}
@@ -1822,14 +1822,46 @@ function montarMenu() {
   $('#btSom').onclick = () => { Som.silenciar(!Som.mudo); Som.fx('clique'); atualizarOpcoes(); salvarCfg(); };
   $('#btAjuda').onclick = () => { Som.fx('clique'); $('#ajuda').classList.add('ativa'); };
   $('#fechaAjuda').onclick = () => $('#ajuda').classList.remove('ativa');
+  const estaCheia = () => !!(document.fullscreenElement || document.webkitFullscreenElement || document.msFullscreenElement || window.navigator.standalone || matchMedia('(display-mode: standalone)').matches);
+  const atualizarBtCheia = () => { $('#btCheia').textContent = estaCheia() ? '⛶ Sair tela cheia' : '⛶ Tela cheia'; };
+  document.addEventListener('fullscreenchange', atualizarBtCheia);
+  document.addEventListener('webkitfullscreenchange', atualizarBtCheia);
+
   $('#btCheia').onclick = () => {
+    Som.fx('clique');
     const d = document.documentElement;
-    try {
-      if (document.fullscreenElement) document.exitFullscreen();
-      else if (d.requestFullscreen) d.requestFullscreen().then(() => { if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => { }); }).catch(() => { });
-      else if (d.webkitRequestFullscreen) d.webkitRequestFullscreen();
-    } catch (e) { /* tela cheia indisponível */ }
+    const req = d.requestFullscreen || d.webkitRequestFullscreen || d.mozRequestFullScreen || d.msRequestFullscreen;
+    const exit = document.exitFullscreen || document.webkitExitFullscreen || document.mozCancelFullScreen || document.msExitFullscreen;
+    if (document.fullscreenElement || document.webkitFullscreenElement) {
+      if (exit) exit.call(document).catch?.(() => {});
+      return;
+    }
+    if (req) {
+      try {
+        const p = req.call(d, { navigationUI: 'hide' });
+        if (p && p.then) {
+          p.then(() => {
+            if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {});
+            setTimeout(redimensionar, 150);
+          }).catch(() => mostrarDicaTelaCheia());
+        } else {
+          setTimeout(redimensionar, 150);
+        }
+      } catch (e) {
+        mostrarDicaTelaCheia();
+      }
+    } else {
+      mostrarDicaTelaCheia();
+    }
   };
+
+  function mostrarDicaTelaCheia() {
+    window.scrollTo(0, 1);
+    const ehIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    alert(ehIOS
+      ? 'No iPhone/iPad (Safari), o navegador bloqueia o botão de tela cheia em páginas web.\n\nPara jogar em tela cheia sem barras:\n1. Toque no ícone de Compartilhar (quadrado com seta para cima)\n2. Escolha "Adicionar à Tela de Início"\n3. Abra o jogo pelo ícone criado!'
+      : 'Seu navegador bloqueou a tela cheia automática. Tente girar o celular deitado ou usar o menu do navegador > "Adicionar à tela inicial".');
+  }
   // pausa
   $('#btPausa').onclick = alternarPausa; $('#continuar').onclick = alternarPausa;
   $('#reiniciar').onclick = () => { $('#pausa').classList.remove('ativa'); prepararCorrida(J.pistaIdx); };
@@ -1993,7 +2025,8 @@ function renderizar() {
   if (J.cams.length > 1) ret(ctx, '#16203c', 0, J.cams[1].vy - 2, LT, 4);   // divisória da tela dividida
 }
 function redimensionar() {
-  const w = innerWidth, h = innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
+  const vv = window.visualViewport;
+  const w = vv ? Math.round(vv.width) : innerWidth, h = vv ? Math.round(vv.height) : innerHeight, dpr = Math.min(devicePixelRatio || 1, 2);
   const e = Math.min(dpr, (temToque ? 960 : 1280) / w) * escalaRes;   // resolução interna limitada para manter 60 quadros
   LT = Math.max(320, Math.round(w * e)); AT = Math.max(180, Math.round(h * e));
   cv.width = cvGL.width = LT; cv.height = cvGL.height = AT; ajustarCameras();
@@ -2026,7 +2059,7 @@ function iniciar() {
   Chao.iniciar(cvGL);
   cvGL.addEventListener('webglcontextlost', e => e.preventDefault());
   cvGL.addEventListener('webglcontextrestored', () => { if (Chao.iniciar(cvGL) && J.P) Chao.textura(J.P.tex); });
-  redimensionar(); addEventListener('resize', redimensionar);
+  redimensionar(); addEventListener('resize', redimensionar); if (window.visualViewport) window.visualViewport.addEventListener('resize', redimensionar);
   if (screen.orientation && screen.orientation.addEventListener) screen.orientation.addEventListener('change', () => setTimeout(redimensionar, 200));
   document.addEventListener('visibilitychange', () => { if (document.hidden && J.estado === 'corrida' && !J.pausado) alternarPausa(); });
   addEventListener('pointerdown', () => Som.iniciar());
